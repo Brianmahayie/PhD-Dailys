@@ -43,7 +43,7 @@ jobs:
           Rscript -e "renv::restore()"
       
       - name: Render R Markdown
-        run: Rscript -e "rmarkdown::render('PhD Dailys4.Rmd')"
+        run: Rscript -e "rmarkdown::render('PhD Dailys.Rmd')"
       
       - name: Commit results
         run: |
