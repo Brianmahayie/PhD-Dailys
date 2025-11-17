@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     
     env:
-      KOBO_API_TOKEN: ${{ secrets.KOBO_API_TOKEN }}
+      KOBO_TOKEN: ${{ secrets.KOBO_TOKEN }}
     
     steps:
       - name: Checkout repository
