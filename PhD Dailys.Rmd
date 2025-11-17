@@ -1,0 +1,25 @@
+---
+title: "Survey Daily Report"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output: 
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(lubridate)
+library(knitr)
+library(scales)
+library(httr)
+library(jsonlite)
+library(kableExtra)
+library(sf)
+library(ggspatial)
+library(gridExtra)
+library(grid)
+library(gtable)
+
+```
