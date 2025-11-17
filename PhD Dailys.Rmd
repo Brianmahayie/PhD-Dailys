@@ -138,7 +138,7 @@ last_7_days <- seq(Sys.Date() - 6, Sys.Date(), by = "day")
 
 **Total surveys:** `r nrow(today_household) + nrow(today_source)`
 
-## Surveyor Performance - Last 7 Days
+## Surveyor Performance
 
 ### Combined Total Surveys
 ```{r}
@@ -257,7 +257,7 @@ source_summary %>%
   row_spec(nrow(source_summary) + 1, bold = TRUE, background = "#e8e8e8")
 ```
 
-## Community Performance - Last 7 Days
+## Community Performance
 
 ### Combined Total Surveys
 ```{r}
