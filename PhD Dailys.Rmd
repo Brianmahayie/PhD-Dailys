@@ -29,4 +29,348 @@ library(gridExtra)
 library(grid)
 library(gtable)
 
+kobo_token <- Sys.getenv("KOBO_TOKEN")
+
+# Household survey
+form_id_household <- "a7WdSwwL7Zug9hC98x5PRd"
+# Water source survey
+form_id_source <- "aDnYgCWxBduEXrC6cFzCP2"
+
+base_url <- "https://kf.kobotoolbox.org/api/v2/assets/"
+
+# Get household data
+response_household <- GET(
+  paste0(base_url, form_id_household, "/data.json"),
+  add_headers(Authorization = paste("Token", kobo_token))
+)
+
+data_list_household <- content(response_household, as = "parsed", simplifyDataFrame = TRUE)
+household_data <- as.data.frame(data_list_household$results)
+
+names(household_data) <- names(household_data) %>%
+  sub(".*/", "", .) %>%
+  sub("^_", "", .)
+
+household_data <- household_data[, !duplicated(names(household_data))]
+
+household_data <- household_data %>%
+  mutate(start_time = ymd_hms(start_time, tz = "UTC")) %>%
+  mutate(end_time = ymd_hms(end_time, tz = "UTC")) %>%
+  mutate(survey_date = as.Date(start_time)) %>%
+  mutate(date_label = format(survey_date, "%b %d"))
+
+numeric_vars_household <- c("adult_men", "adult_women", "boys", "girls", "school_age_boys", 
+  "school_age_girls", "boys_attend_school", "girls_attend_school",
+  "drinking_water_daily_spend", "domestic_water_daily_spend",
+  "drinking_walk_time", "drinking_wait_time", "drinking_trips",
+  "domestic_walk_time", "domestic_wait_time", "domestic_trips",
+  "sources_access", "sources_used", "daily_helpers", "jerrycans_men",
+  "jerrycans_women", "jerrycans_boys", "jerrycans_girls", "jerrycans_hired",
+  "boys_late_school", "girls_late_school", "stored_amount", "sick_water",
+  "injuries_water")
+
+household_data <- household_data %>%
+  mutate(across(all_of(numeric_vars_household[numeric_vars_household %in% names(household_data)]), as.numeric))
+
+household_data$community <- factor(household_data$community,
+                              levels = c("cockle", "dworzark", "portee"),
+                              labels = c("Cockle Bay", "Dworzark", "Portee Rokupa"))
+
+household_data$surveyor_name <- factor(household_data$surveyor_name,
+                                  levels = c("abdulaib", "abdulaik", "boboieh", "jamiatu", "musa", "joana", "moses", "joseph", "other"),
+                                  labels = c("Abdulai B", "Abdulai K", "Boboieh", "Jamiatu", "Musa", "Joana", "Moses", "Joseph", "Other"))
+
+household_data$survey_month <- factor(household_data$survey_month,
+                                 levels = c("november", "december", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october"),
+                                 labels = c("November", "December", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October"))
+
+# Get water source data
+response_source <- GET(
+  paste0(base_url, form_id_source, "/data.json"),
+  add_headers(Authorization = paste("Token", kobo_token))
+)
+
+data_list_source <- content(response_source, as = "parsed", simplifyDataFrame = TRUE)
+source_data <- as.data.frame(data_list_source$results)
+
+names(source_data) <- names(source_data) %>%
+  sub(".*/", "", .) %>%
+  sub("^_", "", .)
+
+source_data <- source_data[, !duplicated(names(source_data))]
+
+source_data <- source_data %>%
+  mutate(start_time = ymd_hms(start_time, tz = "UTC")) %>%
+  mutate(end_time = ymd_hms(end_time, tz = "UTC")) %>%
+  mutate(survey_date = as.Date(start_time)) %>%
+  mutate(date_label = format(survey_date, "%b %d"))
+
+if("consent" %in% names(source_data)) {
+  source_data <- source_data %>% filter(consent == "yes")
+}
+
+numeric_vars_source <- c("percent_women_gatherers", "price_per_jerrycan", "price_per_month")
+
+source_data <- source_data %>%
+  mutate(across(all_of(numeric_vars_source[numeric_vars_source %in% names(source_data)]), as.numeric))
+
+source_data$community <- factor(source_data$community,
+                      levels = c("cockle_bay", "dworzark", "portee_rokupa"),
+                      labels = c("Cockle Bay", "Dworzark", "Portee Rokupa"))
+
+source_data$surveyor_name <- factor(source_data$surveyor_name,
+                                  levels = c("abdulaib", "abdulaik", "boboieh", "jamiatu", "musa", "joana", "moses", "joseph", "other"),
+                                  labels = c("Abdulai B", "Abdulai K", "Boboieh", "Jamiatu", "Musa", "Joana", "Moses", "Joseph", "Other"))
+
+today_household <- household_data %>%
+  filter(survey_date == Sys.Date())
+
+today_source <- source_data %>%
+  filter(survey_date == Sys.Date())
+last_7_days <- seq(Sys.Date() - 6, Sys.Date(), by = "day")
 ```
+
+## Daily Summary
+
+**Household surveys completed today:** `r nrow(today_household)`
+
+**Water source surveys completed today:** `r nrow(today_source)`
+
+**Total surveys:** `r nrow(today_household) + nrow(today_source)`
+
+## Surveyor Performance - Last 7 Days
+
+### Combined Total Surveys
+```{r}
+combined_7day <- bind_rows(
+  household_data %>% mutate(survey_type = "household"),
+  source_data %>% mutate(survey_type = "source")
+) %>%
+  filter(survey_date %in% last_7_days) %>%
+  count(surveyor_name, survey_date) %>%
+  complete(surveyor_name, survey_date = last_7_days, fill = list(n = 0)) %>%
+  pivot_wider(names_from = survey_date, values_from = n, values_fill = 0) %>%
+  mutate(`7-Day Total` = rowSums(select(., -surveyor_name)))
+
+combined_monthly <- bind_rows(
+  household_data %>% mutate(survey_type = "household"),
+  source_data %>% mutate(survey_type = "source")
+) %>%
+  filter(month(survey_date) == month(Sys.Date()), year(survey_date) == year(Sys.Date())) %>%
+  count(surveyor_name, name = "Monthly Total")
+
+combined_lifetime <- bind_rows(
+  household_data %>% mutate(survey_type = "household"),
+  source_data %>% mutate(survey_type = "source")
+) %>%
+  count(surveyor_name, name = "Lifetime Total")
+
+combined_summary <- combined_7day %>%
+  left_join(combined_monthly, by = "surveyor_name") %>%
+  left_join(combined_lifetime, by = "surveyor_name") %>%
+  replace_na(list(`Monthly Total` = 0, `Lifetime Total` = 0)) %>%
+  mutate(surveyor_name = factor(surveyor_name, 
+                                levels = c("Abdulai K", "Abdulai B", "Jamiatu", "Boboieh", 
+                                          "Joseph", "Moses", "Musa", "Joana", "Other"))) %>%
+  arrange(surveyor_name)
+
+total_row_combined <- combined_summary %>%
+  summarise(across(-surveyor_name, sum)) %>%
+  mutate(surveyor_name = "TOTAL", .before = 1)
+
+combined_summary %>%
+  bind_rows(total_row_combined) %>%
+  kable(col.names = c("Surveyor", format(last_7_days, "%a %b %d"), "7-Day Total", "Monthly Total", "Lifetime Total")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  row_spec(nrow(combined_summary) + 1, bold = TRUE, background = "#e8e8e8")
+```
+
+### Household Surveys
+```{r}
+household_summary <- household_data %>%
+  filter(survey_date %in% last_7_days) %>%
+  count(surveyor_name, survey_date) %>%
+  complete(surveyor_name, survey_date = last_7_days, fill = list(n = 0)) %>%
+  pivot_wider(names_from = survey_date, values_from = n, values_fill = 0) %>%
+  mutate(`7-Day Total` = rowSums(select(., -surveyor_name)))
+
+monthly_total <- household_data %>%
+  filter(month(survey_date) == month(Sys.Date()), year(survey_date) == year(Sys.Date())) %>%
+  count(surveyor_name, name = "Monthly Total")
+
+lifetime_total <- household_data %>%
+  count(surveyor_name, name = "Lifetime Total")
+
+household_summary <- household_summary %>%
+  left_join(monthly_total, by = "surveyor_name") %>%
+  left_join(lifetime_total, by = "surveyor_name") %>%
+  replace_na(list(`Monthly Total` = 0, `Lifetime Total` = 0)) %>%
+  mutate(surveyor_name = factor(surveyor_name, 
+                                levels = c("Abdulai K", "Abdulai B", "Jamiatu", "Boboieh", 
+                                          "Joseph", "Moses", "Musa", "Joana", "Other"))) %>%
+  arrange(surveyor_name)
+
+total_row <- household_summary %>%
+  summarise(across(-surveyor_name, sum)) %>%
+  mutate(surveyor_name = "TOTAL", .before = 1)
+
+household_summary %>%
+  bind_rows(total_row) %>%
+  kable(col.names = c("Surveyor", format(last_7_days, "%a %b %d"), "7-Day Total", "Monthly Total", "Lifetime Total")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  row_spec(nrow(household_summary) + 1, bold = TRUE, background = "#e8e8e8")
+```
+
+### Water Source Surveys
+```{r}
+source_summary <- source_data %>%
+  filter(survey_date %in% last_7_days) %>%
+  count(surveyor_name, survey_date) %>%
+  complete(surveyor_name, survey_date = last_7_days, fill = list(n = 0)) %>%
+  pivot_wider(names_from = survey_date, values_from = n, values_fill = 0) %>%
+  mutate(`7-Day Total` = rowSums(select(., -surveyor_name)))
+
+monthly_total_source <- source_data %>%
+  filter(month(survey_date) == month(Sys.Date()), year(survey_date) == year(Sys.Date())) %>%
+  count(surveyor_name, name = "Monthly Total")
+
+lifetime_total_source <- source_data %>%
+  count(surveyor_name, name = "Lifetime Total")
+
+source_summary <- source_summary %>%
+  left_join(monthly_total_source, by = "surveyor_name") %>%
+  left_join(lifetime_total_source, by = "surveyor_name") %>%
+  replace_na(list(`Monthly Total` = 0, `Lifetime Total` = 0)) %>%
+  mutate(surveyor_name = factor(surveyor_name, 
+                                levels = c("Abdulai K", "Abdulai B", "Jamiatu", "Boboieh", 
+                                          "Joseph", "Moses", "Musa", "Joana", "Other"))) %>%
+  arrange(surveyor_name)
+
+total_row_source <- source_summary %>%
+  summarise(across(-surveyor_name, sum)) %>%
+  mutate(surveyor_name = "TOTAL", .before = 1)
+
+source_summary %>%
+  bind_rows(total_row_source) %>%
+  kable(col.names = c("Surveyor", format(last_7_days, "%a %b %d"), "7-Day Total", "Monthly Total", "Lifetime Total")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  row_spec(nrow(source_summary) + 1, bold = TRUE, background = "#e8e8e8")
+```
+
+## Community Performance - Last 7 Days
+
+### Combined Total Surveys
+```{r}
+combined_7day_comm <- bind_rows(
+  household_data %>% mutate(survey_type = "household"),
+  source_data %>% mutate(survey_type = "source")
+) %>%
+  filter(survey_date %in% last_7_days) %>%
+  count(community, survey_date) %>%
+  complete(community, survey_date = last_7_days, fill = list(n = 0)) %>%
+  pivot_wider(names_from = survey_date, values_from = n, values_fill = 0) %>%
+  mutate(`7-Day Total` = rowSums(select(., -community)))
+
+combined_monthly_comm <- bind_rows(
+  household_data %>% mutate(survey_type = "household"),
+  source_data %>% mutate(survey_type = "source")
+) %>%
+  filter(month(survey_date) == month(Sys.Date()), year(survey_date) == year(Sys.Date())) %>%
+  count(community, name = "Monthly Total")
+
+combined_lifetime_comm <- bind_rows(
+  household_data %>% mutate(survey_type = "household"),
+  source_data %>% mutate(survey_type = "source")
+) %>%
+  count(community, name = "Lifetime Total")
+
+combined_community <- combined_7day_comm %>%
+  left_join(combined_monthly_comm, by = "community") %>%
+  left_join(combined_lifetime_comm, by = "community") %>%
+  replace_na(list(`Monthly Total` = 0, `Lifetime Total` = 0)) %>%
+  mutate(community = factor(community, 
+                           levels = c("Portee Rokupa", "Dworzark", "Cockle Bay"))) %>%
+  arrange(community)
+
+total_row_combined_comm <- combined_community %>%
+  summarise(across(-community, sum)) %>%
+  mutate(community = "TOTAL", .before = 1)
+
+combined_community %>%
+  bind_rows(total_row_combined_comm) %>%
+  kable(col.names = c("Community", format(last_7_days, "%a %b %d"), "7-Day Total", "Monthly Total", "Lifetime Total")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  row_spec(nrow(combined_community) + 1, bold = TRUE, background = "#e8e8e8")
+```
+
+### Household Surveys
+```{r}
+household_community <- household_data %>%
+  filter(survey_date %in% last_7_days) %>%
+  count(community, survey_date) %>%
+  complete(community, survey_date = last_7_days, fill = list(n = 0)) %>%
+  pivot_wider(names_from = survey_date, values_from = n, values_fill = 0) %>%
+  mutate(`7-Day Total` = rowSums(select(., -community)))
+
+monthly_total_comm <- household_data %>%
+  filter(month(survey_date) == month(Sys.Date()), year(survey_date) == year(Sys.Date())) %>%
+  count(community, name = "Monthly Total")
+
+lifetime_total_comm <- household_data %>%
+  count(community, name = "Lifetime Total")
+
+household_community <- household_community %>%
+  left_join(monthly_total_comm, by = "community") %>%
+  left_join(lifetime_total_comm, by = "community") %>%
+  replace_na(list(`Monthly Total` = 0, `Lifetime Total` = 0)) %>%
+  mutate(community = factor(community, 
+                           levels = c("Portee Rokupa", "Dworzark", "Cockle Bay"))) %>%
+  arrange(community)
+
+total_row_comm <- household_community %>%
+  summarise(across(-community, sum)) %>%
+  mutate(community = "TOTAL", .before = 1)
+
+household_community %>%
+  bind_rows(total_row_comm) %>%
+  kable(col.names = c("Community", format(last_7_days, "%a %b %d"), "7-Day Total", "Monthly Total", "Lifetime Total")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  row_spec(nrow(household_community) + 1, bold = TRUE, background = "#e8e8e8")
+```
+
+### Water Source Surveys
+```{r}
+source_community <- source_data %>%
+  filter(survey_date %in% last_7_days) %>%
+  count(community, survey_date) %>%
+  complete(community, survey_date = last_7_days, fill = list(n = 0)) %>%
+  pivot_wider(names_from = survey_date, values_from = n, values_fill = 0) %>%
+  mutate(`7-Day Total` = rowSums(select(., -community)))
+
+monthly_total_source_comm <- source_data %>%
+  filter(month(survey_date) == month(Sys.Date()), year(survey_date) == year(Sys.Date())) %>%
+  count(community, name = "Monthly Total")
+
+lifetime_total_source_comm <- source_data %>%
+  count(community, name = "Lifetime Total")
+
+source_community <- source_community %>%
+  left_join(monthly_total_source_comm, by = "community") %>%
+  left_join(lifetime_total_source_comm, by = "community") %>%
+  replace_na(list(`Monthly Total` = 0, `Lifetime Total` = 0)) %>%
+  mutate(community = factor(community, 
+                           levels = c("Portee Rokupa", "Dworzark", "Cockle Bay"))) %>%
+  arrange(community)
+
+total_row_source_comm <- source_community %>%
+  summarise(across(-community, sum)) %>%
+  mutate(community = "TOTAL", .before = 1)
+
+source_community %>%
+  bind_rows(total_row_source_comm) %>%
+  kable(col.names = c("Community", format(last_7_days, "%a %b %d"), "7-Day Total", "Monthly Total", "Lifetime Total")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover")) %>%
+  row_spec(nrow(source_community) + 1, bold = TRUE, background = "#e8e8e8")
+```
+
+
