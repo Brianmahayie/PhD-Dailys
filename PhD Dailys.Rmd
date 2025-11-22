@@ -373,4 +373,35 @@ source_community %>%
   row_spec(nrow(source_community) + 1, bold = TRUE, background = "#e8e8e8")
 ```
 
+## Surveyor Daily Work Hours
+```{r}
+household_times <- household_data %>%
+  filter(survey_date %in% last_7_days) %>%
+  group_by(surveyor_name, survey_date) %>%
+  summarise(
+    start = min(start_time),
+    end = max(end_time),
+    n_hh = n(),
+    .groups = "drop"
+  )
 
+source_counts <- source_data %>%
+  filter(survey_date %in% last_7_days) %>%
+  count(surveyor_name, survey_date, name = "n_source")
+
+combined_times <- household_times %>%
+  left_join(source_counts, by = c("surveyor_name", "survey_date")) %>%
+  replace_na(list(n_source = 0)) %>%
+  mutate(time_range = paste0(format(start, "%H:%M"), " - ", format(end, "%H:%M"), " (", n_hh, " / ", n_source, ")")) %>%
+  select(surveyor_name, survey_date, time_range) %>%
+  complete(surveyor_name, survey_date = last_7_days, fill = list(time_range = "")) %>%
+  pivot_wider(names_from = survey_date, values_from = time_range, values_fill = "") %>%
+  mutate(surveyor_name = factor(surveyor_name, 
+                                levels = c("Abdulai K", "Abdulai B", "Jamiatu", "Boboieh", 
+                                          "Joseph", "Moses", "Musa", "Joana", "Other"))) %>%
+  arrange(surveyor_name)
+
+combined_times %>%
+  kable(col.names = c("Surveyor", format(last_7_days, "%a %b %d"))) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
