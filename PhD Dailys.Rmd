@@ -28,6 +28,7 @@ library(ggspatial)
 library(gridExtra)
 library(grid)
 library(gtable)
+library(prettymapr)
 
 kobo_token <- Sys.getenv("KOBO_TOKEN")
 

@@ -1,10 +1,8 @@
 name: Daily Report
-
 on:
   schedule:
     - cron: '0 20 * * *'  # 8pm GMT (Sierra Leone time)
   workflow_dispatch:  # Allows manual trigger
-
 jobs:
   render:
     runs-on: ubuntu-latest
@@ -41,6 +39,9 @@ jobs:
         run: |
           Rscript -e "if (!requireNamespace('renv', quietly = TRUE)) install.packages('renv')"
           Rscript -e "renv::restore()"
+      
+      - name: Install prettymapr
+        run: Rscript -e "install.packages('prettymapr')"
       
       - name: Render R Markdown
         run: Rscript -e "rmarkdown::render('PhD Dailys.Rmd')"
