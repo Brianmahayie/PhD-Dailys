@@ -539,7 +539,7 @@ outline_colors <- c("Abdulai K" = "black", "Abdulai B" = "white", "Other Surveyo
 
 # Portee Rokupa map
 ggplot() +
-  annotation_map_tile(type = "osm", zoomin = 0) +
+  annotation_map_tile(type = "osm", zoomin = 0, progress = "none") +
   geom_sf(data = portee_shapefile, fill = NA, color = "black", linewidth = 1) +
   geom_sf(data = portee_surveys, aes(fill = day_name, shape = survey_type, color = surveyor_type, alpha = alpha_value, size = size_value), 
           stroke = 1) +
@@ -623,7 +623,7 @@ outline_colors <- c("Jamiatu" = "black", "Boboieh" = "white", "Joseph" = "blue",
 
 # Dworzark map
 ggplot() +
-  annotation_map_tile(type = "osm", zoomin = 0) +
+  annotation_map_tile(type = "osm", zoomin = 0, progress = "none") +
   geom_sf(data = dworzark_shapefile, fill = NA, color = "black", linewidth = 1) +
   geom_sf(data = dworzark_surveys, aes(fill = day_name, shape = survey_type, color = surveyor_type, alpha = alpha_value, size = size_value), 
           stroke = 1) +
@@ -695,7 +695,7 @@ outline_colors <- c("Musa" = "black", "Other Surveyor" = "white")
 
 # Cockle Bay map
 ggplot() +
-  annotation_map_tile(type = "osm", zoomin = 0) +
+  annotation_map_tile(type = "osm", zoomin = 0, progress = "none") +
   geom_sf(data = cockle_shapefile, fill = NA, color = "black", linewidth = 1) +
   geom_sf(data = cockle_surveys, aes(fill = day_name, shape = survey_type, color = surveyor_type, alpha = alpha_value, size = size_value), 
           stroke = 1) +
