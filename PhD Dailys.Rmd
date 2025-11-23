@@ -477,3 +477,240 @@ final_table_colored %>%
   kable_styling(bootstrap_options = c("striped", "hover")) %>%
   row_spec(nrow(combined_summary) + 1, bold = TRUE, background = "#e8e8e8")
 ```
+
+# Mapping ####
+
+## Portee Rokupa Map ####
+```{r, fig.height=10}
+# Read the shapefile
+portee_shapefile <- st_read("shapefiles/PorteeRokupa.shp", quiet = TRUE)
+
+# Combine household and water source data for Portee Rokupa
+portee_surveys <- bind_rows(
+  household_data %>% 
+    filter(community == "Portee Rokupa") %>%
+    select(community, survey_date, surveyor_name, gps_location) %>%
+    mutate(survey_type = "Household"),
+  source_data %>% 
+    filter(community == "Portee Rokupa") %>%
+    select(community, survey_date, surveyor_name, gps_location) %>%
+    mutate(survey_type = "Water Source")
+) %>%
+  filter(!is.na(gps_location)) %>%
+  separate(gps_location, into = c("latitude", "longitude", "altitude", "accuracy"), 
+           sep = " ", remove = FALSE, convert = TRUE) %>%
+  filter(!is.na(latitude), !is.na(longitude)) %>%
+  mutate(
+    day_name = factor(weekdays(survey_date), 
+                     levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")),
+    surveyor_type = case_when(
+      surveyor_name == "Abdulai K" ~ "Abdulai K",
+      surveyor_name == "Abdulai B" ~ "Abdulai B",
+      TRUE ~ "Other Surveyor"
+    ),
+    outline_color = case_when(
+      surveyor_name == "Abdulai K" ~ "black",
+      surveyor_name == "Abdulai B" ~ "white",
+      TRUE ~ "gray"
+    ),
+    is_recent = survey_date >= Sys.Date() - 7,
+    alpha_value = ifelse(is_recent, 1, 0.7),
+    size_value = ifelse(is_recent, 3, 2)
+  ) %>%
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
+
+# Define day colors (rainbow order: red through purple, grey for Sunday)
+day_colors <- c(
+  "Monday" = "#FF0000",      # Red
+  "Tuesday" = "#FF7F00",     # Orange
+  "Wednesday" = "#FFFF00",   # Yellow
+  "Thursday" = "#00FF00",    # Green
+  "Friday" = "#0000FF",      # Blue
+  "Saturday" = "#8B00FF",    # Purple
+  "Sunday" = "#808080"       # Grey
+)
+
+# Define shapes for survey types
+survey_shapes <- c("Household" = 21, "Water Source" = 24)
+
+# Define outline colors
+outline_colors <- c("Abdulai K" = "black", "Abdulai B" = "white", "Other Surveyor" = "gray")
+
+# Portee Rokupa map
+ggplot() +
+  annotation_map_tile(type = "osm", zoomin = 0) +
+  geom_sf(data = portee_shapefile, fill = NA, color = "black", linewidth = 1) +
+  geom_sf(data = portee_surveys, aes(fill = day_name, shape = survey_type, color = surveyor_type, alpha = alpha_value, size = size_value), 
+          stroke = 1) +
+  scale_fill_manual(values = day_colors) +
+  scale_shape_manual(values = survey_shapes) +
+  scale_color_manual(values = outline_colors) +
+  scale_alpha_identity() +
+  scale_size_identity() +
+  labs(title = "All Surveys in Portee Rokupa", fill = "Day", shape = "Survey Type", color = "Surveyor") +
+  theme_minimal() +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title = element_blank()) +
+  guides(
+    fill = guide_legend(override.aes = list(shape = 21, color = "black", size = 3, alpha = 1, stroke = 1)),
+    shape = guide_legend(override.aes = list(fill = "gray", color = "black", size = 3, alpha = 1, stroke = 1)),
+    color = guide_legend(override.aes = list(fill = "gray", shape = 21, size = 3, alpha = 1, stroke = 1))
+  )
+```
+
+## Dworzark Map ####
+
+```{r, fig.height=10}
+# Read the shapefile
+dworzark_shapefile <- st_read("shapefiles/Dworzark.shp", quiet = TRUE)
+
+# Combine household and water source data for Dworzark
+dworzark_surveys <- bind_rows(
+  household_data %>% 
+    filter(community == "Dworzark") %>%
+    select(community, survey_date, surveyor_name, gps_location) %>%
+    mutate(survey_type = "Household"),
+  source_data %>% 
+    filter(community == "Dworzark") %>%
+    select(community, survey_date, surveyor_name, gps_location) %>%
+    mutate(survey_type = "Water Source")
+) %>%
+  filter(!is.na(gps_location)) %>%
+  separate(gps_location, into = c("latitude", "longitude", "altitude", "accuracy"), 
+           sep = " ", remove = FALSE, convert = TRUE) %>%
+  filter(!is.na(latitude), !is.na(longitude)) %>%
+  mutate(
+    day_name = factor(weekdays(survey_date), 
+                     levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")),
+    surveyor_type = case_when(
+      surveyor_name == "Jamiatu" ~ "Jamiatu",
+      surveyor_name == "Boboieh" ~ "Boboieh",
+      surveyor_name == "Joseph" ~ "Joseph",
+      surveyor_name == "Moses" ~ "Moses",
+      TRUE ~ "Other Surveyor"
+    ),
+    outline_color = case_when(
+      surveyor_name == "Jamiatu" ~ "black",
+      surveyor_name == "Boboieh" ~ "white",
+      surveyor_name == "Joseph" ~ "blue",
+      surveyor_name == "Moses" ~ "red",
+      TRUE ~ "gray"
+    ),
+    is_recent = survey_date >= Sys.Date() - 7,
+    alpha_value = ifelse(is_recent, 1, 0.7),
+    size_value = ifelse(is_recent, 3, 2)
+  ) %>%
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
+
+# Define day colors (rainbow order: red through purple, grey for Sunday)
+day_colors <- c(
+  "Monday" = "#FF0000",      # Red
+  "Tuesday" = "#FF7F00",     # Orange
+  "Wednesday" = "#FFFF00",   # Yellow
+  "Thursday" = "#00FF00",    # Green
+  "Friday" = "#0000FF",      # Blue
+  "Saturday" = "#8B00FF",    # Purple
+  "Sunday" = "#808080"       # Grey
+)
+
+# Define shapes for survey types
+survey_shapes <- c("Household" = 21, "Water Source" = 24)
+
+# Define outline colors
+outline_colors <- c("Jamiatu" = "black", "Boboieh" = "white", "Joseph" = "blue", "Moses" = "red", "Other Surveyor" = "gray")
+
+# Dworzark map
+ggplot() +
+  annotation_map_tile(type = "osm", zoomin = 0) +
+  geom_sf(data = dworzark_shapefile, fill = NA, color = "black", linewidth = 1) +
+  geom_sf(data = dworzark_surveys, aes(fill = day_name, shape = survey_type, color = surveyor_type, alpha = alpha_value, size = size_value), 
+          stroke = 1) +
+  scale_fill_manual(values = day_colors) +
+  scale_shape_manual(values = survey_shapes) +
+  scale_color_manual(values = outline_colors) +
+  scale_alpha_identity() +
+  scale_size_identity() +
+  labs(title = "All Surveys in Dworzark", fill = "Day", shape = "Survey Type", color = "Surveyor") +
+  theme_minimal() +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title = element_blank()) +
+  guides(
+    fill = guide_legend(override.aes = list(shape = 21, color = "black", size = 3, alpha = 1, stroke = 1)),
+    shape = guide_legend(override.aes = list(fill = "gray", color = "black", size = 3, alpha = 1, stroke = 1)),
+    color = guide_legend(override.aes = list(fill = "gray", shape = 21, size = 3, alpha = 1, stroke = 1))
+  )
+```
+
+## Cockle Bay Map ####
+
+```{r, fig.height=10}
+# Read the shapefile
+cockle_shapefile <- st_read("shapefiles/CockleBay.shp", quiet = TRUE)
+
+# Combine household and water source data for Cockle Bay
+cockle_surveys <- bind_rows(
+  household_data %>% 
+    filter(community == "Cockle Bay") %>%
+    select(community, survey_date, surveyor_name, gps_location) %>%
+    mutate(survey_type = "Household"),
+  source_data %>% 
+    filter(community == "Cockle Bay") %>%
+    select(community, survey_date, surveyor_name, gps_location) %>%
+    mutate(survey_type = "Water Source")
+) %>%
+  filter(!is.na(gps_location)) %>%
+  separate(gps_location, into = c("latitude", "longitude", "altitude", "accuracy"), 
+           sep = " ", remove = FALSE, convert = TRUE) %>%
+  filter(!is.na(latitude), !is.na(longitude)) %>%
+  mutate(
+    day_name = factor(weekdays(survey_date), 
+                     levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")),
+    surveyor_type = ifelse(surveyor_name == "Musa", "Musa", "Other Surveyor"),
+    outline_color = ifelse(surveyor_name == "Musa", "black", "white"),
+    is_recent = survey_date >= Sys.Date() - 7,
+    alpha_value = ifelse(is_recent, 1, 0.7),
+    size_value = ifelse(is_recent, 3, 2)
+  ) %>%
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
+
+# Define day colors (rainbow order: red through purple, grey for Sunday)
+day_colors <- c(
+  "Monday" = "#FF0000",      # Red
+  "Tuesday" = "#FF7F00",     # Orange
+  "Wednesday" = "#FFFF00",   # Yellow
+  "Thursday" = "#00FF00",    # Green
+  "Friday" = "#0000FF",      # Blue
+  "Saturday" = "#8B00FF",    # Purple
+  "Sunday" = "#808080"       # Grey
+)
+
+# Define shapes for survey types
+survey_shapes <- c("Household" = 21, "Water Source" = 24)
+
+# Define outline colors
+outline_colors <- c("Musa" = "black", "Other Surveyor" = "white")
+
+# Cockle Bay map
+ggplot() +
+  annotation_map_tile(type = "osm", zoomin = 0) +
+  geom_sf(data = cockle_shapefile, fill = NA, color = "black", linewidth = 1) +
+  geom_sf(data = cockle_surveys, aes(fill = day_name, shape = survey_type, color = surveyor_type, alpha = alpha_value, size = size_value), 
+          stroke = 1) +
+  scale_fill_manual(values = day_colors) +
+  scale_shape_manual(values = survey_shapes) +
+  scale_color_manual(values = outline_colors) +
+  scale_alpha_identity() +
+  scale_size_identity() +
+  labs(title = "All Surveys in Cockle Bay", fill = "Day", shape = "Survey Type", color = "Surveyor") +
+  theme_minimal() +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title = element_blank()) +
+  guides(
+    fill = guide_legend(override.aes = list(shape = 21, color = "black", size = 3, alpha = 1, stroke = 1)),
+    shape = guide_legend(override.aes = list(fill = "gray", color = "black", size = 3, alpha = 1, stroke = 1)),
+    color = guide_legend(override.aes = list(fill = "gray", shape = 21, size = 3, alpha = 1, stroke = 1))
+  )
+```
