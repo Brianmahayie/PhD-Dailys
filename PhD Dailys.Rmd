@@ -424,7 +424,7 @@ combined_times_final <- combined_times %>%
 combined_times_final %>%
   kable(col.names = c("Surveyor", format(last_4_days, "%a %b %d"), "Totals"), escape = FALSE, format = "html", align = c("l", rep("c", 5))) %>%
   kable_styling(bootstrap_options = c("striped", "hover")) %>%
-  row_spec(which(combined_times_final$surveyor_name %in% c("GRAND TOTAL", "Portee Rokupa Total", "Dworzark Total", "Cockle Bay Total")), bold = TRUE, background = "#f0f0f0")
+  row_spec(which(combined_times_final$surveyor_name %in% c("GRAND TOTAL", "Portee Rokupa Total", "Dworzark Total", "Cockle Bay Total")), bold = TRUE, background = "#f0f0f0", extra_css = "white-space: nowrap;")
 
 ```
 
@@ -475,8 +475,8 @@ final_table_colored %>%
   kable(col.names = c("Surveyor", format(month_dates, "%a %b %d"), "Month Total"),
         caption = paste0("<center><h3>Total Surveys of Any Kind in ", month_name, "</h3></center>"),
         escape = FALSE, format = "html", align = c("l", rep("c", ncol(final_table_colored)-1))) %>%
-  kable_styling(bootstrap_options = c("striped", "hover")) %>%
-  row_spec(nrow(combined_summary) + 1, bold = TRUE, background = "#e8e8e8")
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = F) %>%
+  row_spec(nrow(combined_summary) + 1, bold = TRUE, background = "#e8e8e8", extra_css = "white-space: nowrap;")
 ```
 
 # Mapping ####
