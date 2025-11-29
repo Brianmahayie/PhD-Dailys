@@ -60,7 +60,8 @@ household_data <- household_data %>%
   mutate(start_time = ymd_hms(start_time, tz = "UTC")) %>%
   mutate(end_time = ymd_hms(end_time, tz = "UTC")) %>%
   mutate(survey_date = as.Date(start_time)) %>%
-  mutate(date_label = format(survey_date, "%b %d"))
+  mutate(date_label = format(survey_date, "%b %d")) %>%
+  filter(survey_date >= floor_date(Sys.Date(), "month"))
 
 numeric_vars_household <- c("adult_men", "adult_women", "boys", "girls", "school_age_boys", 
   "school_age_girls", "boys_attend_school", "girls_attend_school",
@@ -763,59 +764,6 @@ ggplot() +
     color = guide_legend(override.aes = list(fill = "gray", shape = 21, size = 3, alpha = 1, stroke = 1))
   )
 ```
-
-
-```{r}
-# Read the shapefile
-portee_shapefile <- st_read("shapefiles/PorteeRokupa.shp", quiet = TRUE)
-# Transform shapefile to WGS84 if needed
-portee_shapefile_wgs84 <- st_transform(portee_shapefile, crs = 4326)
-# Get only water source data for Portee Rokupa
-portee_surveys <- source_data %>% 
-  filter(community == "Portee Rokupa") %>%
-  select(community, start_time, surveyor_name, gps_location, source_photo, porteezone, respondent_name, water_source_type) %>%
-  filter(!is.na(gps_location)) %>%
-  separate(gps_location, into = c("latitude", "longitude", "altitude", "accuracy"), 
-           sep = " ", remove = FALSE, convert = TRUE) %>%
-  filter(!is.na(latitude), !is.na(longitude)) %>%
-  st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
-# Transform to UTM for distance calculation
-portee_surveys_utm <- st_transform(portee_surveys, crs = 32628)
-portee_shapefile_utm <- st_transform(portee_shapefile_wgs84, crs = 32628)
-# Calculate distance from each point to the shapefile boundary
-distances <- st_distance(portee_surveys_utm, portee_shapefile_utm)
-# Filter points MORE than 100m from the shapefile
-portee_surveys_far <- portee_surveys[as.numeric(distances) > 300, ]
-
-# Create the photo path
-portee_surveys_far <- portee_surveys_far %>%
-  st_drop_geometry() %>%
-  mutate(
-    safe_filename = ifelse(!is.na(source_photo),
-                          paste0(
-                            gsub(" ", "", community), "_",
-                            gsub(" ", "", porteezone), "_",
-                            gsub(" ", "", water_source_type), "_",
-                            source_photo
-                          ),
-                          NA),
-    photo_path = ifelse(!is.na(safe_filename),
-                       file.path("water_source_photos_resized", safe_filename),
-                       NA),
-    photo_display = ifelse(!is.na(photo_path) & file.exists(photo_path),
-                          paste0("![](", photo_path, "){width=100px}"),
-                          "No photo")
-  )
-
-# Create output table with embedded images
-portee_surveys_far %>%
-  select(photo_display, porteezone, respondent_name, surveyor_name) %>%
-  kable(col.names = c("Picture", "Zone", "Owner", "Surveyor"),
-        align = c("l", "l", "l", "l"),
-        escape = FALSE) %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
-```
-
 
 # Monthly Performance
 
