@@ -107,7 +107,8 @@ source_data <- source_data %>%
   mutate(start_time = ymd_hms(start_time, tz = "UTC")) %>%
   mutate(end_time = ymd_hms(end_time, tz = "UTC")) %>%
   mutate(survey_date = as.Date(start_time)) %>%
-  mutate(date_label = format(survey_date, "%b %d"))
+  mutate(date_label = format(survey_date, "%b %d"))%>%
+  filter(survey_date >= floor_date(Sys.Date(), "month"))
 
 if("consent" %in% names(source_data)) {
   source_data <- source_data %>% filter(consent == "yes")
@@ -417,7 +418,7 @@ apply_color <- function(text, n_total, date) {
 }
 
 # Limit to first 6 dates (columns 1-2 are Surveyor and Totals, plus 6 dates = 8 columns)
-dates_to_show <- all_dates[1:4]
+dates_to_show <- all_dates[1:min(4, length(all_dates))]
 
 # Combine counts only (no times, blank for 0)
 combined_times_final <- combined_times %>%
