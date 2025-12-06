@@ -157,7 +157,7 @@ community_progress <- targets %>%
 
 ```{r}
 # Get all unique dates
-all_dates <- sort(unique(c(household_data$survey_date, source_data$survey_date)), decreasing = FALSE)
+all_dates <- sort(unique(c(household_data$survey_date, source_data$survey_date)), decreasing = TRUE)
 
 household_times <- household_data %>%
   group_by(surveyor_name, survey_date) %>%
