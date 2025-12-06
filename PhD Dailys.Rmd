@@ -835,7 +835,10 @@ combined_times <- combined_times_raw %>%
   mutate(surveyor_name = factor(surveyor_name, 
                           levels = c("Abdulai K", "Abdulai B", "Jamiatu", "Boboieh", 
                                     "Joseph", "Moses", "Musa", "Joana", "Other"))) %>%
-  arrange(surveyor_name)
+  arrange(surveyor_name) %>%
+  group_by(surveyor_name) %>%
+  filter(any(n_total > 0)) %>%
+  ungroup()
 
 # Grand total
 grand_daily <- household_data %>%
