@@ -55,26 +55,12 @@ names(household_data) <- names(household_data) %>%
   sub("^_", "", .)
 
 household_data <- household_data[, !duplicated(names(household_data))]
-
+household_data$uuid <- gsub("uuid:", "", household_data$instanceID)
 household_data <- household_data %>%
   mutate(start_time = ymd_hms(start_time, tz = "UTC")) %>%
   mutate(end_time = ymd_hms(end_time, tz = "UTC")) %>%
   mutate(survey_date = as.Date(start_time)) %>%
-  mutate(date_label = format(survey_date, "%b %d")) %>%
-  filter(survey_date >= floor_date(Sys.Date(), "month"))
-
-numeric_vars_household <- c("adult_men", "adult_women", "boys", "girls", "school_age_boys", 
-  "school_age_girls", "boys_attend_school", "girls_attend_school",
-  "drinking_water_daily_spend", "domestic_water_daily_spend",
-  "drinking_walk_time", "drinking_wait_time", "drinking_trips",
-  "domestic_walk_time", "domestic_wait_time", "domestic_trips",
-  "sources_access", "sources_used", "daily_helpers", "jerrycans_men",
-  "jerrycans_women", "jerrycans_boys", "jerrycans_girls", "jerrycans_hired",
-  "boys_late_school", "girls_late_school", "stored_amount", "sick_water",
-  "injuries_water")
-
-household_data <- household_data %>%
-  mutate(across(all_of(numeric_vars_household[numeric_vars_household %in% names(household_data)]), as.numeric))
+  mutate(date_label = format(survey_date, "%b %d"))
 
 household_data$community <- factor(household_data$community,
                               levels = c("cockle", "dworzark", "portee"),
@@ -87,6 +73,22 @@ household_data$surveyor_name <- factor(household_data$surveyor_name,
 household_data$survey_month <- factor(household_data$survey_month,
                                  levels = c("november", "december", "january", "february", "march", "april", "may", "june", "july", "august", "september", "october"),
                                  labels = c("November", "December", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October"))
+
+household_data$surveyor_name[household_data$uuid == "e6c9f82c-7257-41e1-90f8-0f1df5df1741"] <- "Musa"
+household_data$surveyor_name[household_data$uuid == "20bbff41-5fa0-474d-874a-0d67251e3005"] <- "Musa"
+
+household_variables <- c("uuid", "community", "hhid", "surveyor_name", "survey_date", "start_time", "end_time", "gps_location")
+
+household_data_current_month <- household_data %>%
+  select(all_of(household_variables)) %>%
+  filter(survey_date >= floor_date(Sys.Date(), "month"))
+household_data_previous_month <- household_data %>%
+  select(all_of(household_variables)) %>%
+  filter(survey_date >= floor_date(Sys.Date() - months(1), "month"),
+         survey_date < floor_date(Sys.Date(), "month"))
+household_data_all <- household_data %>%
+  select(uuid, hhid, community, surveyor_name, survey_date, start_time, end_time, gps_location)
+
 
 # Get water source data
 response_source <- GET(
@@ -106,18 +108,11 @@ source_data <- source_data[, !duplicated(names(source_data))]
 source_data <- source_data %>%
   mutate(start_time = ymd_hms(start_time, tz = "UTC")) %>%
   mutate(end_time = ymd_hms(end_time, tz = "UTC")) %>%
-  mutate(survey_date = as.Date(start_time)) %>%
-  mutate(date_label = format(survey_date, "%b %d"))%>%
-  filter(survey_date >= floor_date(Sys.Date(), "month"))
+  mutate(survey_date = as.Date(start_time))
 
 if("consent" %in% names(source_data)) {
   source_data <- source_data %>% filter(consent == "yes")
 }
-
-numeric_vars_source <- c("percent_women_gatherers", "price_per_jerrycan", "price_per_month")
-
-source_data <- source_data %>%
-  mutate(across(all_of(numeric_vars_source[numeric_vars_source %in% names(source_data)]), as.numeric))
 
 source_data$community <- factor(source_data$community,
                       levels = c("cockle_bay", "dworzark", "portee_rokupa"),
@@ -127,7 +122,20 @@ source_data$surveyor_name <- factor(source_data$surveyor_name,
                                   levels = c("abdulaib", "abdulaik", "boboieh", "jamiatu", "musa", "joana", "moses", "joseph", "other"),
                                   labels = c("Abdulai B", "Abdulai K", "Boboieh", "Jamiatu", "Musa", "Joana", "Moses", "Joseph", "Other"))
 
+source_variables <- c("community", "surveyor_name", "survey_date", "start_time", "end_time", "gps_location", "consent")
+
+source_data_current_month <- source_data %>%
+  select(all_of(source_variables)) %>%
+  mutate(date_label = format(survey_date, "%b %d")) %>%
+  filter(survey_date >= floor_date(Sys.Date(), "month"))
+source_data_all <- source_data %>%
+  select(all_of(source_variables))
+source_data_two_months_ago <- source_data %>%
+  select(all_of(source_variables)) %>%
+  filter(survey_date >= floor_date(Sys.Date() - months(2), "month"),
+         survey_date < floor_date(Sys.Date() - months(1), "month"))
 ```
+
 
 ```{r}
 # Define target surveys per community
@@ -135,17 +143,17 @@ targets <- tibble(
   community = c("Portee Rokupa", "Dworzark", "Cockle Bay"),
   target = c(170, 340, 170)
 )
-
 # Count completed household surveys by community
-completed <- household_data %>%
+completed <- household_data_current_month %>%
   count(community, name = "completed")
-
 # Calculate remaining surveys
 community_progress <- targets %>%
   left_join(completed, by = "community") %>%
   replace_na(list(completed = 0)) %>%
   mutate(remaining = target - completed)
 ```
+
+**Total**: `r sum(community_progress$completed)`/`r sum(community_progress$target)` surveys completed, `r sum(community_progress$remaining)` remaining
 
 **Portee Rokupa**: `r community_progress$completed[community_progress$community == "Portee Rokupa"]`/`r community_progress$target[community_progress$community == "Portee Rokupa"]` surveys completed, `r community_progress$remaining[community_progress$community == "Portee Rokupa"]` remaining
 
@@ -157,9 +165,9 @@ community_progress <- targets %>%
 
 ```{r}
 # Get all unique dates
-all_dates <- sort(unique(c(household_data$survey_date, source_data$survey_date)), decreasing = TRUE)
+all_dates <- sort(unique(c(household_data_current_month$survey_date, source_data_current_month$survey_date)), decreasing = TRUE)
 
-household_times <- household_data %>%
+household_times <- household_data_current_month %>%
   group_by(surveyor_name, survey_date) %>%
   summarise(
     start = min(start_time),
@@ -168,7 +176,7 @@ household_times <- household_data %>%
     .groups = "drop"
   )
 
-source_times <- source_data %>%
+source_times <- source_data_current_month %>%
   group_by(surveyor_name, survey_date) %>%
   summarise(
     start = min(start_time),
@@ -190,22 +198,22 @@ combined_times_raw <- household_times %>%
   ) %>%
   select(surveyor_name, survey_date, time_range, n_total, n_hh, n_source)
 
-week_totals <- household_data %>%
+week_totals <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 7) %>%
   count(surveyor_name, name = "hh_week") %>%
   full_join(
-    source_data %>%
+    source_data_current_month %>%
       filter(survey_date >= Sys.Date() - 7) %>%
       count(surveyor_name, name = "source_week"),
     by = "surveyor_name"
   ) %>%
   replace_na(list(hh_week = 0, source_week = 0))
 
-month_totals <- household_data %>%
+month_totals <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 30) %>%
   count(surveyor_name, name = "hh_month") %>%
   full_join(
-    source_data %>%
+    source_data_current_month %>%
       filter(survey_date >= Sys.Date() - 30) %>%
       count(surveyor_name, name = "source_month"),
     by = "surveyor_name"
@@ -220,34 +228,34 @@ combined_times <- combined_times_raw %>%
   mutate(surveyor_name = factor(surveyor_name, 
                           levels = c("Abdulai K", "Abdulai B", "Jamiatu", "Boboieh", 
                                     "Joseph", "Moses", "Musa", "Joana", "Other"))) %>%
-  arrange(surveyor_name)%>%
+  arrange(surveyor_name) %>%
   filter(rowSums(across(where(is.numeric)), na.rm = TRUE) > 0)
 
 # Grand total
-grand_daily <- household_data %>%
+grand_daily <- household_data_current_month %>%
   count(survey_date, name = "n_hh") %>%
   full_join(
-    source_data %>%
+    source_data_current_month %>%
       count(survey_date, name = "n_source"),
     by = "survey_date"
   ) %>%
   replace_na(list(n_hh = 0, n_source = 0))
 
-grand_week <- household_data %>%
+grand_week <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 7) %>%
   summarise(hh_week = n()) %>%
   bind_cols(
-    source_data %>%
+    source_data_current_month %>%
       filter(survey_date >= Sys.Date() - 7) %>%
       summarise(source_week = n())
   ) %>%
   replace_na(list(hh_week = 0, source_week = 0))
 
-grand_month <- household_data %>%
+grand_month <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 30) %>%
   summarise(hh_month = n()) %>%
   bind_cols(
-    source_data %>%
+    source_data_current_month %>%
       filter(survey_date >= Sys.Date() - 30) %>%
       summarise(source_month = n())
   ) %>%
@@ -266,32 +274,32 @@ grand_total <- grand_daily %>%
   select(surveyor_name, survey_date, time_range, n_total, hh_week, source_week, hh_month, source_month)
 
 # Portee Rokupa subtotal
-portee_daily <- household_data %>%
+portee_daily <- household_data_current_month %>%
   filter(community == "Portee Rokupa") %>%
   count(survey_date, name = "n_hh") %>%
   full_join(
-    source_data %>%
+    source_data_current_month %>%
       filter(community == "Portee Rokupa") %>%
       count(survey_date, name = "n_source"),
     by = "survey_date"
   ) %>%
   replace_na(list(n_hh = 0, n_source = 0))
 
-portee_week <- household_data %>%
+portee_week <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 7, community == "Portee Rokupa") %>%
   summarise(hh_week = n()) %>%
   bind_cols(
-    source_data %>%
+    source_data_current_month %>%
       filter(survey_date >= Sys.Date() - 7, community == "Portee Rokupa") %>%
       summarise(source_week = n())
   ) %>%
   replace_na(list(hh_week = 0, source_week = 0))
 
-portee_month <- household_data %>%
+portee_month <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 30, community == "Portee Rokupa") %>%
   summarise(hh_month = n()) %>%
   bind_cols(
-    source_data %>%
+    source_data_current_month %>%
       filter(survey_date >= Sys.Date() - 30, community == "Portee Rokupa") %>%
       summarise(source_month = n())
   ) %>%
@@ -310,32 +318,32 @@ portee_subtotal <- portee_daily %>%
   select(surveyor_name, survey_date, time_range, n_total, hh_week, source_week, hh_month, source_month)
 
 # Dworzark subtotal
-dworzark_daily <- household_data %>%
+dworzark_daily <- household_data_current_month %>%
   filter(community == "Dworzark") %>%
   count(survey_date, name = "n_hh") %>%
   full_join(
-    source_data %>%
+    source_data_current_month %>%
       filter(community == "Dworzark") %>%
       count(survey_date, name = "n_source"),
     by = "survey_date"
   ) %>%
   replace_na(list(n_hh = 0, n_source = 0))
 
-dworzark_week <- household_data %>%
+dworzark_week <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 7, community == "Dworzark") %>%
   summarise(hh_week = n()) %>%
   bind_cols(
-    source_data %>%
+    source_data_current_month %>%
       filter(survey_date >= Sys.Date() - 7, community == "Dworzark") %>%
       summarise(source_week = n())
   ) %>%
   replace_na(list(hh_week = 0, source_week = 0))
 
-dworzark_month <- household_data %>%
+dworzark_month <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 30, community == "Dworzark") %>%
   summarise(hh_month = n()) %>%
   bind_cols(
-    source_data %>%
+    source_data_current_month %>%
       filter(survey_date >= Sys.Date() - 30, community == "Dworzark") %>%
       summarise(source_month = n())
   ) %>%
@@ -354,32 +362,32 @@ dworzark_subtotal <- dworzark_daily %>%
   select(surveyor_name, survey_date, time_range, n_total, hh_week, source_week, hh_month, source_month)
 
 # Cockle Bay subtotal
-cockle_daily <- household_data %>%
+cockle_daily <- household_data_current_month %>%
   filter(community == "Cockle Bay") %>%
   count(survey_date, name = "n_hh") %>%
   full_join(
-    source_data %>%
+    source_data_current_month %>%
       filter(community == "Cockle Bay") %>%
       count(survey_date, name = "n_source"),
     by = "survey_date"
   ) %>%
   replace_na(list(n_hh = 0, n_source = 0))
 
-cockle_week <- household_data %>%
+cockle_week <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 7, community == "Cockle Bay") %>%
   summarise(hh_week = n()) %>%
   bind_cols(
-    source_data %>%
+    source_data_current_month %>%
       filter(survey_date >= Sys.Date() - 7, community == "Cockle Bay") %>%
       summarise(source_week = n())
   ) %>%
   replace_na(list(hh_week = 0, source_week = 0))
 
-cockle_month <- household_data %>%
+cockle_month <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 30, community == "Cockle Bay") %>%
   summarise(hh_month = n()) %>%
   bind_cols(
-    source_data %>%
+    source_data_current_month %>%
       filter(survey_date >= Sys.Date() - 30, community == "Cockle Bay") %>%
       summarise(source_month = n())
   ) %>%
@@ -418,7 +426,7 @@ apply_color <- function(text, n_total, date) {
   }
 }
 
-# Limit to first 6 dates (columns 1-2 are Surveyor and Totals, plus 6 dates = 8 columns)
+# Limit to first 4 dates
 dates_to_show <- all_dates[1:min(4, length(all_dates))]
 
 # Combine counts only (no times, blank for 0)
@@ -463,7 +471,7 @@ combined_times_final <- combined_times %>%
 # Identify Sunday columns
 sunday_cols <- which(weekdays(as.Date(dates_to_show)) == "Sunday") + 2
 
-# Render table with vertical lines after Sundays and Totals
+# Render table
 tbl <- combined_times_final %>%
   kable(
     col.names = c("Surveyor", "Totals", format(dates_to_show, "%a %b %d")),
@@ -485,7 +493,7 @@ tbl <- combined_times_final %>%
     background = "#f0f0f0",
     extra_css = "white-space: nowrap; vertical-align: middle;"
   ) %>%
-  row_spec(0, extra_css = "white-space: nowrap;")%>%
+  row_spec(0, extra_css = "white-space: nowrap;") %>%
   column_spec(2:ncol(combined_times_final), extra_css = "white-space: nowrap; vertical-align: middle;") %>%
   column_spec(2, extra_css = "border-right: 2px solid black; white-space: nowrap; vertical-align: middle;")
 
@@ -499,111 +507,83 @@ tbl
 
 # Mapping
 
-## Portee Rokupa Map
-```{r, fig.height=10}
+## Portee Rokupa - Remaining Households Map
+```{r portee-remaining-map, eval=F}
 # Read the shapefile
 portee_shapefile <- st_read("shapefiles/PorteeRokupa.shp", quiet = TRUE)
-
-# Transform shapefile to WGS84 if needed
 portee_shapefile_wgs84 <- st_transform(portee_shapefile, crs = 4326)
 
-# Combine household and water source data for Portee Rokupa
-portee_surveys <- bind_rows(
-  household_data %>% 
-    filter(community == "Portee Rokupa") %>%
-    select(community, survey_date, surveyor_name, gps_location) %>%
-    mutate(survey_type = "Household"),
-  source_data %>% 
-    filter(community == "Portee Rokupa") %>%
-    select(community, survey_date, surveyor_name, gps_location) %>%
-    mutate(survey_type = "Water Source")
-) %>%
+# Get unique hhids from previous month in Portee Rokupa
+previous_hhids <- household_data_previous_month %>%
+  filter(community == "Portee Rokupa") %>%
+  pull(hhid) %>%
+  unique()
+
+# Get unique hhids from current month in Portee Rokupa
+current_hhids <- household_data_current_month %>%
+  filter(community == "Portee Rokupa") %>%
+  pull(hhid) %>%
+  unique()
+
+# Find hhids that still need to be surveyed
+remaining_hhids <- setdiff(previous_hhids, current_hhids)
+
+# Get location data for remaining households (take first occurrence per hhid)
+portee_remaining <- household_data_previous_month %>%
+  filter(community == "Portee Rokupa") %>%
+  filter(hhid %in% remaining_hhids) %>%
   filter(!is.na(gps_location)) %>%
+  group_by(hhid) %>%
+  slice(1) %>%
+  ungroup() %>%
   separate(gps_location, into = c("latitude", "longitude", "altitude", "accuracy"), 
            sep = " ", remove = FALSE, convert = TRUE) %>%
   filter(!is.na(latitude), !is.na(longitude)) %>%
   st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
 
-# Transform to a projected CRS for distance calculation (UTM zone for Sierra Leone)
-portee_surveys_utm <- st_transform(portee_surveys, crs = 32628)
+# Transform to UTM for distance calculation
+portee_remaining_utm <- st_transform(portee_remaining, crs = 32628)
 portee_shapefile_utm <- st_transform(portee_shapefile_wgs84, crs = 32628)
 
-# Calculate distance from each point to the shapefile boundary
-distances <- st_distance(portee_surveys_utm, portee_shapefile_utm)
+# Filter households within 100m of community boundary
+distances <- st_distance(portee_remaining_utm, portee_shapefile_utm)
+portee_remaining_filtered <- portee_remaining[as.numeric(distances) <= 100, ]
 
-# Filter points within 100m of the shapefile
-portee_surveys_filtered <- portee_surveys[as.numeric(distances) <= 100, ]
+# Count statistics
+n_previous <- length(previous_hhids)
+n_completed <- length(current_hhids)
+n_remaining <- length(remaining_hhids)
 
-# Continue with the rest of the code using filtered data
-portee_surveys_filtered <- portee_surveys_filtered %>%
-  mutate(
-    day_name = factor(weekdays(survey_date), 
-                     levels = c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")),
-    surveyor_type = case_when(
-      surveyor_name == "Abdulai K" ~ "Abdulai K",
-      surveyor_name == "Abdulai B" ~ "Abdulai B",
-      TRUE ~ "Other Surveyor"
-    ),
-    outline_color = case_when(
-      surveyor_name == "Abdulai K" ~ "black",
-      surveyor_name == "Abdulai B" ~ "white",
-      TRUE ~ "gray"
-    ),
-    is_recent = survey_date >= Sys.Date() - 7,
-    alpha_value = ifelse(is_recent, 1, 0.7),
-    size_value = ifelse(is_recent, 3, 2)
-  )
-
-# Define day colors (rainbow order: red through purple, grey for Sunday)
-day_colors <- c(
-  "Monday" = "#FF0000",      # Red
-  "Tuesday" = "#FF7F00",     # Orange
-  "Wednesday" = "#FFFF00",   # Yellow
-  "Thursday" = "#00FF00",    # Green
-  "Friday" = "#0000FF",      # Blue
-  "Saturday" = "#8B00FF",    # Purple
-  "Sunday" = "#808080"       # Grey
-)
-
-# Define shapes for survey types
-survey_shapes <- c("Household" = 21, "Water Source" = 24)
-
-# Define outline colors
-outline_colors <- c("Abdulai K" = "black", "Abdulai B" = "white", "Other Surveyor" = "gray")
-
-# Portee Rokupa map
+# Plot
 ggplot() +
   annotation_map_tile(type = "osm", zoomin = 0, progress = "none") +
   geom_sf(data = portee_shapefile_wgs84, fill = NA, color = "black", linewidth = 1) +
-  geom_sf(data = portee_surveys_filtered, aes(fill = day_name, shape = survey_type, color = surveyor_type, alpha = alpha_value, size = size_value), 
-          stroke = 1) +
-  scale_fill_manual(values = day_colors) +
-  scale_shape_manual(values = survey_shapes) +
-  scale_color_manual(values = outline_colors) +
-  scale_alpha_identity() +
-  scale_size_identity() +
-  labs(title = "All Surveys in Portee Rokupa", fill = "Day", shape = "Survey Type", color = "Surveyor") +
+  geom_sf(data = portee_remaining_filtered, 
+          color = "red", fill = "yellow", shape = 21, size = 3, stroke = 1) +
+  labs(
+    title = "Portee Rokupa - Remaining Households to Survey",
+    subtitle = paste0("Previous month: ", n_previous, " | Completed this month: ", n_completed, " | Remaining: ", n_remaining)
+  ) +
   theme_minimal() +
-  theme(axis.text = element_blank(),
-        axis.ticks = element_blank(),
-        axis.title = element_blank()) +
-  guides(
-    fill = guide_legend(override.aes = list(shape = 21, color = "black", size = 3, alpha = 1, stroke = 1)),
-    shape = guide_legend(override.aes = list(fill = "gray", color = "black", size = 3, alpha = 1, stroke = 1)),
-    color = guide_legend(override.aes = list(fill = "gray", shape = 21, size = 3, alpha = 1, stroke = 1))
+  theme(
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title = element_blank(),
+    plot.title = element_text(face = "bold"),
+    plot.subtitle = element_text(color = "gray40")
   )
 ```
 
 ## Dworzark Map
 
-```{r, fig.height=10, fig.width=8}
+```{r, fig.height=10, fig.width=8, eval=F}
 # Read the shapefile
 dworzark_shapefile <- st_read("shapefiles/Dworzark.shp", quiet = TRUE)
 # Transform shapefile to WGS84 if needed
 dworzark_shapefile_wgs84 <- st_transform(dworzark_shapefile, crs = 4326)
 
 # Get household data for Dworzark
-dworzark_households <- household_data %>% 
+dworzark_households <- household_data_current_month %>% 
   filter(community == "Dworzark") %>%
   select(community, survey_date, surveyor_name, gps_location) %>%
   mutate(survey_type = "Household") %>%
@@ -622,7 +602,7 @@ distances <- st_distance(dworzark_households_utm, dworzark_shapefile_utm)
 dworzark_households_filtered <- dworzark_households[as.numeric(distances) <= 100, ]
 
 # Get all water source data for Dworzark (no filtering)
-dworzark_sources <- source_data %>% 
+dworzark_sources <- source_data_current_month %>% 
   filter(community == "Dworzark") %>%
   select(community, survey_date, surveyor_name, gps_location) %>%
   mutate(survey_type = "Water Source") %>%
@@ -698,17 +678,17 @@ ggplot() +
 
 ## Cockle Bay Map
 
-```{r, fig.height=10}
+```{r, fig.height=10, eval=F}
 # Read the shapefile
 cockle_shapefile <- st_read("shapefiles/CockleBay.shp", quiet = TRUE)
 
 # Combine household and water source data for Cockle Bay
 cockle_surveys <- bind_rows(
-  household_data %>% 
+  household_data_current_month %>% 
     filter(community == "Cockle Bay") %>%
     select(community, survey_date, surveyor_name, gps_location) %>%
     mutate(survey_type = "Household"),
-  source_data %>% 
+  source_data_current_month %>% 
     filter(community == "Cockle Bay") %>%
     select(community, survey_date, surveyor_name, gps_location) %>%
     mutate(survey_type = "Water Source")
@@ -771,10 +751,21 @@ ggplot() +
 # Monthly Performance
 
 ```{r}
-# Get all unique dates
-all_dates <- sort(unique(c(household_data$survey_date, source_data$survey_date)), decreasing = FALSE)
+# Get current month and year
+current_month <- month(Sys.Date())
+current_year <- year(Sys.Date())
 
-household_times <- household_data %>%
+# Filter to current month
+household_data_current_month <- household_data_current_month %>%
+  filter(month(survey_date) == current_month & year(survey_date) == current_year)
+
+source_data <- source_data %>%
+  filter(month(survey_date) == current_month & year(survey_date) == current_year)
+
+# Get all unique dates (now only from current month)
+all_dates <- sort(unique(c(household_data_current_month$survey_date, source_data$survey_date)), decreasing = T)
+
+household_times <- household_data_current_month %>%
   group_by(surveyor_name, survey_date) %>%
   summarise(
     start = min(start_time),
@@ -805,7 +796,7 @@ combined_times_raw <- household_times %>%
   ) %>%
   select(surveyor_name, survey_date, time_range, n_total, n_hh, n_source)
 
-week_totals <- household_data %>%
+week_totals <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 7) %>%
   count(surveyor_name, name = "hh_week") %>%
   full_join(
@@ -816,7 +807,7 @@ week_totals <- household_data %>%
   ) %>%
   replace_na(list(hh_week = 0, source_week = 0))
 
-month_totals <- household_data %>%
+month_totals <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 30) %>%
   count(surveyor_name, name = "hh_month") %>%
   full_join(
@@ -841,7 +832,7 @@ combined_times <- combined_times_raw %>%
   ungroup()
 
 # Grand total
-grand_daily <- household_data %>%
+grand_daily <- household_data_current_month %>%
   count(survey_date, name = "n_hh") %>%
   full_join(
     source_data %>%
@@ -850,7 +841,7 @@ grand_daily <- household_data %>%
   ) %>%
   replace_na(list(n_hh = 0, n_source = 0))
 
-grand_week <- household_data %>%
+grand_week <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 7) %>%
   summarise(hh_week = n()) %>%
   bind_cols(
@@ -860,7 +851,7 @@ grand_week <- household_data %>%
   ) %>%
   replace_na(list(hh_week = 0, source_week = 0))
 
-grand_month <- household_data %>%
+grand_month <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 30) %>%
   summarise(hh_month = n()) %>%
   bind_cols(
@@ -883,7 +874,7 @@ grand_total <- grand_daily %>%
   select(surveyor_name, survey_date, time_range, n_total, hh_week, source_week, hh_month, source_month)
 
 # Portee Rokupa subtotal
-portee_daily <- household_data %>%
+portee_daily <- household_data_current_month %>%
   filter(community == "Portee Rokupa") %>%
   count(survey_date, name = "n_hh") %>%
   full_join(
@@ -894,7 +885,7 @@ portee_daily <- household_data %>%
   ) %>%
   replace_na(list(n_hh = 0, n_source = 0))
 
-portee_week <- household_data %>%
+portee_week <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 7, community == "Portee Rokupa") %>%
   summarise(hh_week = n()) %>%
   bind_cols(
@@ -904,7 +895,7 @@ portee_week <- household_data %>%
   ) %>%
   replace_na(list(hh_week = 0, source_week = 0))
 
-portee_month <- household_data %>%
+portee_month <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 30, community == "Portee Rokupa") %>%
   summarise(hh_month = n()) %>%
   bind_cols(
@@ -927,7 +918,7 @@ portee_subtotal <- portee_daily %>%
   select(surveyor_name, survey_date, time_range, n_total, hh_week, source_week, hh_month, source_month)
 
 # Dworzark subtotal
-dworzark_daily <- household_data %>%
+dworzark_daily <- household_data_current_month %>%
   filter(community == "Dworzark") %>%
   count(survey_date, name = "n_hh") %>%
   full_join(
@@ -938,7 +929,7 @@ dworzark_daily <- household_data %>%
   ) %>%
   replace_na(list(n_hh = 0, n_source = 0))
 
-dworzark_week <- household_data %>%
+dworzark_week <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 7, community == "Dworzark") %>%
   summarise(hh_week = n()) %>%
   bind_cols(
@@ -948,7 +939,7 @@ dworzark_week <- household_data %>%
   ) %>%
   replace_na(list(hh_week = 0, source_week = 0))
 
-dworzark_month <- household_data %>%
+dworzark_month <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 30, community == "Dworzark") %>%
   summarise(hh_month = n()) %>%
   bind_cols(
@@ -971,7 +962,7 @@ dworzark_subtotal <- dworzark_daily %>%
   select(surveyor_name, survey_date, time_range, n_total, hh_week, source_week, hh_month, source_month)
 
 # Cockle Bay subtotal
-cockle_daily <- household_data %>%
+cockle_daily <- household_data_current_month %>%
   filter(community == "Cockle Bay") %>%
   count(survey_date, name = "n_hh") %>%
   full_join(
@@ -982,7 +973,7 @@ cockle_daily <- household_data %>%
   ) %>%
   replace_na(list(n_hh = 0, n_source = 0))
 
-cockle_week <- household_data %>%
+cockle_week <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 7, community == "Cockle Bay") %>%
   summarise(hh_week = n()) %>%
   bind_cols(
@@ -992,7 +983,7 @@ cockle_week <- household_data %>%
   ) %>%
   replace_na(list(hh_week = 0, source_week = 0))
 
-cockle_month <- household_data %>%
+cockle_month <- household_data_current_month %>%
   filter(survey_date >= Sys.Date() - 30, community == "Cockle Bay") %>%
   summarise(hh_month = n()) %>%
   bind_cols(
